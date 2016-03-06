@@ -1,5 +1,5 @@
 /**
- * \file UserAnalysis.h
+ * \file TrackAnalysis.h
  *
  * 
  * \brief Little sample program for establishing a user analysis space.
@@ -14,19 +14,19 @@
 
 #include "TTree.h"
 
-namespace test{
-  class UserAnalysis;
+namespace trk{
+  class TrackAnalysis;
 }
 
-class test::UserAnalysis{
+class trk::TrackAnalysis{
   
 public:
   
   /// Default constructor
-  UserAnalysis();
+  TrackAnalysis();
 
   /// Default destructor
-  virtual ~UserAnalysis(){};
+  virtual ~TrackAnalysis(){};
 
   void RunAnalysis();
   void SetupOutputTree(TTree*);

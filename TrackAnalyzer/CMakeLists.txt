@@ -3,8 +3,8 @@
 art_make(
 	  MODULE_LIBRARIES
 			ub_TrackAnalysis
-#			Geometry
-#	  	        Geometry_service
+			Geometry
+	  	        Geometry_service
 #		        Utilities
 #	       	        TimeService_service
 #	                uboone_Geometry

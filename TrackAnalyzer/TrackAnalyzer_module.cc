@@ -22,6 +22,7 @@
 #include "TTree.h"
 
 #include "TrackAnalysis/TrackAnalysis.hh"
+#include "Geometry/Geometry.h"
 
 namespace trk {
   class TrackAnalyzer;
@@ -48,7 +49,9 @@ public:
 private:
 
   // Declare member data here.
-  trk::TrackAnalysis fMyAnalysisObj;
+  trk::TrackAnalysis fAlg;
+
+  std::vector<std::string> fTrackModuleLabels;
   
 };
 
@@ -59,17 +62,32 @@ trk::TrackAnalyzer::TrackAnalyzer(fhicl::ParameterSet const & p)
  // More initializers here.
 {
   art::ServiceHandle<art::TFileService> tfs;
-  fMyAnalysisObj.SetupOutputTree(tfs->make<TTree>("myanatree","MyAnalysis Tree"));
+  fAlg.SetupOutputTree(tfs->make<TTree>("myanatree","MyAnalysis Tree"));
+  this->reconfigure(p);
 }
 
 void trk::TrackAnalyzer::analyze(art::Event const & e)
 {
-  fMyAnalysisObj.RunAnalysis();
+
+  std::cout << "Track labels size is " << fTrackModuleLabels.size() << std::endl;
+  
+  std::vector< std::vector<recob::Track> > trackVectors;
+  for(size_t i_l=0; i_l<fTrackModuleLabels.size(); ++i_l){
+    art::Handle< std::vector<recob::Track> > trackHandle;
+    e.getByLabel(fTrackModuleLabels[i_l],trackHandle);
+    trackVectors.push_back(*trackHandle);
+  }
+  
+  art::ServiceHandle<geo::Geometry> geoHandle;
+
+  fAlg.ProcessTracks(trackVectors,*geoHandle);
+
 }
 
 void trk::TrackAnalyzer::reconfigure(fhicl::ParameterSet const & p)
 {
-  // Implementation of optional member function here.
+  fAlg.Configure(p.get<fhicl::ParameterSet>("TrackAnalysisAlg"));
+  fTrackModuleLabels = p.get< std::vector<std::string> >("TrackModuleLabels");
 }
 
 DEFINE_ART_MODULE(trk::TrackAnalyzer)

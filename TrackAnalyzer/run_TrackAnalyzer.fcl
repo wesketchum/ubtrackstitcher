@@ -16,8 +16,8 @@ services : {
   user:
   {
 	#BELOW you see a list of the common services! Uncomment the ones you need.
-  	#ExptGeoHelperInterface:         @local::microboone_geometry_helper
-  	#Geometry:                       @local::microboone_geo
+  	ExptGeoHelperInterface:         @local::microboone_geometry_helper
+  	Geometry:                       @local::microboone_geo
  	#DetectorProperties:             @local::microboone_detproperties
  	#LArProperties:                  @local::microboone_properties
  	#DatabaseUtil:                   @local::microboone_database
@@ -48,8 +48,17 @@ physics: {
   }
   analyzers: {
      # ParameterSets for zero or more analyzer modules
-     userana: { module_type: TrackAnalyzer
-     	      	input_param: "optional" }
+     trkana: { module_type: TrackAnalyzer
+     
+#     	       TrackModuleLabels: ["pandoraCosmic","pandoraCosmicKHit","pandoraNu","pandoraNuKHit"]
+     	       TrackModuleLabels: ["pandoraCosmic","pandoraNu"]
+     	       TrackAnalysisAlg:{
+	         ZBuffer:10
+		 YBuffer:10
+		 XBuffer:10
+		 Isolation:3
+	       }
+	     }
   }
 
   filters : {
@@ -67,7 +76,7 @@ physics: {
 
 
   #here, just a shorthand: could have done ana: [ userana ] then end_paths: [ ana ]
-  ana1: [userana]
+  ana1: [trkana]
   end_paths: [ ana1 ]
 
 }

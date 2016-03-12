@@ -11,6 +11,13 @@ trk::TrackAnalysis::TrackAnalysis(){}
 void trk::TrackAnalysis::SetupOutputTree(TTree* tfs_tree_trk){
   fTrackTree = tfs_tree_trk;
   fTrackTree->SetObject(fTrackTree->GetName(),"Track Tree");
+  fTrackTree->Branch("run",&fRun);
+  fTrackTree->Branch("event",&fEvent);
+  fTrackTree->Branch("trk",&fTrackTreeObj,fTrackTreeObj.Leaflist().c_str());
+  fTrackTree->Branch("trk_col",&fCollection);
+  fTrackTree->Branch("trk_id",&fTrkID);
+  fTrackTree->Branch("trk_mindist",&fDistance);
+  fTrackTree->Branch("trk_containment",&fContainment);
 }
 
 void trk::TrackAnalysis::Configure(fhicl::ParameterSet const& p)
@@ -70,6 +77,12 @@ double trk::TrackAnalysis::MinDistanceEndPt(recob::Track const& t_probe, recob::
   return std::sqrt(min_distance);
 }
 
+void trk::TrackAnalysis::SetRunEvent(unsigned int const& run, unsigned int const& event)
+{
+  fRun = run;
+  fEvent = event;
+}
+
 void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > const& tracksVec,
 				       geo::GeometryCore const& geo)
 {
@@ -85,16 +98,17 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 
   fTrackContainmentLevel.clear();
   fTrackContainmentLevel.resize(tracksVec.size());
+  fMinDistances.clear();
+  fMinDistances.resize(tracksVec.size());
+
   fTrackContainmentIndices.clear();
   fTrackContainmentIndices.push_back( std::vector< std::pair<int,int> >() );
 
   //std::cout << "Made it here with tracks of size " << tracksVec.size() << std::endl;
 
-  std::vector< std::vector<double> > minDistances(tracksVec.size());
-  
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     fTrackContainmentLevel[i_tc].resize(tracksVec[i_tc].size(),-1);
-    minDistances[i_tc].resize(tracksVec[i_tc].size(),9e12);
+    fMinDistances[i_tc].resize(tracksVec[i_tc].size(),9e12);
     n_tracks += tracksVec[i_tc].size();
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
       //std::cout << "\tprocessing " << i_tc << " " << i_t << std::endl;
@@ -102,8 +116,8 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 	if(!track_linked) track_linked=true;
 	fTrackContainmentLevel[i_tc][i_t] = 0;
 	fTrackContainmentIndices.back().emplace_back(i_tc,i_t);
-	std::cout << "\tTrack (" << i_tc << "," << i_t << ")" 
-		  << " " << containment_level << std::endl;
+	//std::cout << "\tTrack (" << i_tc << "," << i_t << ")" 
+	//	  << " " << containment_level << std::endl;
 
       }
     }
@@ -126,18 +140,18 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 	      //std::cout << "\t\t" << MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
 	      //std::cout << "\t\t" << MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
 
-	      if(MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<minDistances[i_tc][i_t])
-		minDistances[i_tc][i_t] = MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
-	      if(MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<minDistances[i_tc][i_t])
-		minDistances[i_tc][i_t] = MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
+	      if(MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fMinDistances[i_tc][i_t])
+		fMinDistances[i_tc][i_t] = MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
+	      if(MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fMinDistances[i_tc][i_t])
+		fMinDistances[i_tc][i_t] = MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
 	      
 	      if(MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fIsolation ||
 		 MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fIsolation){
 		if(!track_linked) track_linked=true;
 		fTrackContainmentLevel[i_tc][i_t] = containment_level;
 		fTrackContainmentIndices.back().emplace_back(i_tc,i_t);
-		std::cout << "\tTrackPair (" << i_tc << "," << i_t << ") and (" << i_tr.first << "," << i_tr.second << ")"
-			  << " " << containment_level << std::endl;
+		//std::cout << "\tTrackPair (" << i_tc << "," << i_t << ") and (" << i_tr.first << "," << i_tr.second << ")"
+		//	  << " " << containment_level << std::endl;
 	      }
 	    }
 	  }
@@ -148,27 +162,35 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
-      if(fTrackContainmentLevel[i_tc][i_t]<0){
-	std::cout << "Track (" << i_tc << "," << i_t << ")" 
-		  << " " << fTrackContainmentLevel[i_tc][i_t]
-		  << " " << minDistances[i_tc][i_t] << std::endl;
+      fTrackTreeObj = TrackTree_t(tracksVec[i_tc][i_t]);
+      fDistance = fMinDistances[i_tc][i_t];
+      fCollection = i_tc;
+      fTrkID = i_t;
+      fContainment = fTrackContainmentLevel[i_tc][i_t];
 
-	std::cout << "\tS_(X,Y,Z) = ("
-		  << tracksVec[i_tc][i_t].Vertex().X() << ","
-		  << tracksVec[i_tc][i_t].Vertex().Y() << ","
-		  << tracksVec[i_tc][i_t].Vertex().Z() << ")" << std::endl;
-	std::cout << "\tNearest wire ..." << std::endl;
-	for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
-	  std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].Vertex(),i_p).Wire << std::endl;
-	std::cout << "\tE_(X,Y,Z) = ("
-		  << tracksVec[i_tc][i_t].End().X() << ","
-		  << tracksVec[i_tc][i_t].End().Y() << ","
-		  << tracksVec[i_tc][i_t].End().Z() << ")" << std::endl;
-	std::cout << "\tNearest wire ..." << std::endl;
-	for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
-	  std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].End(),i_p).Wire << std::endl;
-	std::cout << "\tLength=" << tracksVec[i_tc][i_t].Length() << std::endl;
-	std::cout << "\tSimple_length=" << (tracksVec[i_tc][i_t].End()-tracksVec[i_tc][i_t].Vertex()).Mag() << std::endl;
+      fTrackTree->Fill();
+      
+      if(fTrackContainmentLevel[i_tc][i_t]<0){
+	//std::cout << "Track (" << i_tc << "," << i_t << ")" 
+	//	  << " " << fTrackContainmentLevel[i_tc][i_t]
+	//	  << " " << minDistances[i_tc][i_t] << std::endl;
+
+	//std::cout << "\tS_(X,Y,Z) = ("
+	//	  << tracksVec[i_tc][i_t].Vertex().X() << ","
+	//	  << tracksVec[i_tc][i_t].Vertex().Y() << ","
+	//	  << tracksVec[i_tc][i_t].Vertex().Z() << ")" << std::endl;
+	//std::cout << "\tNearest wire ..." << std::endl;
+	//for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
+	//std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].Vertex(),i_p).Wire << std::endl;
+	//std::cout << "\tE_(X,Y,Z) = ("
+	//	  << tracksVec[i_tc][i_t].End().X() << ","
+	//	  << tracksVec[i_tc][i_t].End().Y() << ","
+	//	  << tracksVec[i_tc][i_t].End().Z() << ")" << std::endl;
+	//std::cout << "\tNearest wire ..." << std::endl;
+	//for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
+	//std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].End(),i_p).Wire << std::endl;
+	//std::cout << "\tLength=" << tracksVec[i_tc][i_t].Length() << std::endl;
+	//std::cout << "\tSimple_length=" << (tracksVec[i_tc][i_t].End()-tracksVec[i_tc][i_t].Vertex()).Mag() << std::endl;
       }
     }
   }

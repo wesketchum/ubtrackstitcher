@@ -69,7 +69,7 @@ trk::TrackAnalyzer::TrackAnalyzer(fhicl::ParameterSet const & p)
 void trk::TrackAnalyzer::analyze(art::Event const & e)
 {
 
-  std::cout << "Track labels size is " << fTrackModuleLabels.size() << std::endl;
+  fAlg.SetRunEvent(e.run(),e.event());
   
   std::vector< std::vector<recob::Track> > trackVectors;
   for(size_t i_l=0; i_l<fTrackModuleLabels.size(); ++i_l){

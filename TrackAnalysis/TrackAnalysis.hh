@@ -44,6 +44,9 @@ namespace trk{
     double end_phi;
     double length;
     double length_simple;
+
+    std::string Leaflist()
+    { return "start_x/D:start_y/D:start_z/D:start_theta/D:start_phi/D:end_x/D:end_y/D:end_z/D:end_theta/D:end_phi/D:length/D:length_simple/D"; }
     
   } TrackTree_t;
   
@@ -64,6 +67,7 @@ public:
 
   void Configure(fhicl::ParameterSet const&);
   
+  void SetRunEvent(unsigned int const&, unsigned int const&);
   void ProcessTracks(std::vector< std::vector<recob::Track> > const&,
 		     geo::GeometryCore const& );
   
@@ -74,10 +78,18 @@ public:
   double      fXBuffer;
   double      fIsolation;
   
-  TTree*      fTrackTree;
-  TrackTree_t fTrackTreeObj;
+  TTree*       fTrackTree;
+  TrackTree_t  fTrackTreeObj;
+  unsigned int fRun;
+  unsigned int fEvent;
+  unsigned int fCollection;
+  unsigned int fTrkID;
+  double       fDistance;
+  int          fContainment;
+  
   std::vector< std::vector<int> > fTrackContainmentLevel;
   std::vector< std::vector< std::pair<int,int> > > fTrackContainmentIndices;
+  std::vector< std::vector<double> > fMinDistances;
 
   bool IsContained(recob::Track const&, geo::GeometryCore const&);
 

@@ -168,11 +168,15 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
   fTrackContainmentIndices.clear();
   fTrackContainmentIndices.push_back( std::vector< std::pair<int,int> >() );
 
+  fCosmicTags.clear();
+  fCosmicTags.resize(tracksVec.size());
+
   //first, loop through tracks and see what's not contained
   
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     fTrackContainmentLevel[i_tc].resize(tracksVec[i_tc].size(),-1);
     fMinDistances[i_tc].resize(tracksVec[i_tc].size(),9e12);
+    fCosmicTags[i_tc].resize(tracksVec[i_tc].size(),anab::CosmicTag(-1));
     n_tracks += tracksVec[i_tc].size();
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
 
@@ -208,10 +212,12 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 	  {
 	    for(auto const& i_tr : fTrackContainmentIndices[containment_level-1]){
 
+	      /*
 	      if(fDebug){
 		std::cout << "\t\t" << MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
 		std::cout << "\t\t" << MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
 	      }
+	      */
 	      
 	      if(MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fMinDistances[i_tc][i_t])
 		fMinDistances[i_tc][i_t] = MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
@@ -240,6 +246,9 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
   }//end while linking tracks
 
 
+  if(fDebug)
+    std::cout << "All done! Now let's make the tree!" << std::endl;
+  
   //now we're going to will the tree and create tags if requested
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
@@ -254,8 +263,11 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 
       if(fMakeCosmicTags){
 
+	//default (if track looks contained and isolated)
 	float score=0;
 	auto id = anab::CosmicTagID_t::kNotTagged;
+
+	//overwrite if track is not contained or not isolated
 	if(fTrackContainmentLevel[i_tc][i_t]>=0){
 	  score = 1./(1.+(float)fTrackContainmentLevel[i_tc][i_t]);
 	  if(fTrackContainmentLevel[i_tc][i_t]==0)

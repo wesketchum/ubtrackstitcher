@@ -5,9 +5,9 @@ process_name : UserAnalysis      #The process name must NOT contain any undersco
 source : {
   module_type : RootInput
   maxEvents   : -1
-  firstRun: 5108
-  firstSubRun: 98
-  firstEvent: 4950
+#  firstRun: 5108
+#  firstSubRun: 98
+#  firstEvent: 4950
 }
 
 services : {
@@ -41,13 +41,27 @@ services : {
 outputs: {
   optionalout: { module_type: RootOutput
   	         fileName: "output_file.root"
-		 fastCloning: false }
+		 fastCloning: false
+		 outputCommands: ["drop *_*_*_*","keep *_*_*_UserAnalysis","keep *_pandora*_*_*" ]
+		 }
 }
 
 physics: {
 
   producers : {
-     # ParameterSets for zero or more producer modules
+     isotag: { module_type: TrackContainmentTagger
+     
+#     	       TrackModuleLabels: ["pandoraCosmic","pandoraCosmicKHit","pandoraNu","pandoraNuKHit"]
+	       ApplyTags: [ true, true ]
+	       TrackModuleLabels: ["pandoraCosmic","pandoraNu"]
+     	       TrackAnalysisAlg:{
+	         ZBuffer:10
+		 YBuffer:10
+		 XBuffer:10
+		 Isolation:2.5
+		 Debug: false
+	       }
+	     }
   }
   analyzers: {
      # ParameterSets for zero or more analyzer modules
@@ -79,8 +93,11 @@ physics: {
 
 
   #here, just a shorthand: could have done ana: [ userana ] then end_paths: [ ana ]
+  reco: [ isotag ]
+  trigger_paths: [ reco ]
   ana1: [trkana]
-  end_paths: [ ana1 ]
+  out : [ optionalout ]
+  end_paths: [ out ]
 
 }
 

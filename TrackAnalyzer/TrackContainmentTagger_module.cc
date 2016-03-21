@@ -73,12 +73,14 @@ void trk::TrackContainmentTagger::produce(art::Event & e)
   std::unique_ptr< art::Assns<recob::Track, anab::CosmicTag > >  assnOutCosmicTagTrack( new art::Assns<recob::Track, anab::CosmicTag>);
   
   fAlg.SetRunEvent(e.run(),e.event());
-  
+
   std::vector< std::vector<recob::Track> > trackVectors;
-  std::vector< art::Handle< std::vector<recob::Track> > > trackHandles(fTrackModuleLabels.size());
+  std::vector< art::Handle< std::vector<recob::Track> > > trackHandles;
   for(size_t i_l=0; i_l<fTrackModuleLabels.size(); ++i_l){
-    e.getByLabel(fTrackModuleLabels[i_l],trackHandles[i_l]);
-    trackVectors.push_back(*trackHandles[i_l]);
+    art::Handle< std::vector<recob::Track> >  trackHandle;
+    e.getByLabel(fTrackModuleLabels[i_l],trackHandle);
+    trackVectors.push_back(*trackHandle);
+    trackHandles.push_back(trackHandle);
   }
   
   art::ServiceHandle<geo::Geometry> geoHandle;

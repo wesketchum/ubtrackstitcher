@@ -26,6 +26,9 @@ void trk::TrackAnalysis::Configure(fhicl::ParameterSet const& p)
   fYBuffer = p.get<double>("YBuffer");
   fXBuffer = p.get<double>("XBuffer");
   fIsolation = p.get<double>("Isolation");
+
+  fDebug = p.get<bool>("Debug",false);
+  fMakeCosmicTags = p.get<bool>("MakeCosmicTags",true);
 }
 
 bool trk::TrackAnalysis::IsContained(recob::Track const& track, geo::GeometryCore const& geo)
@@ -44,6 +47,63 @@ bool trk::TrackAnalysis::IsContained(recob::Track const& track, geo::GeometryCor
     return false;
 
   return true;
+}
+
+anab::CosmicTagID_t trk::TrackAnalysis::GetCosmicTagID(recob::Track const& track, geo::GeometryCore const& geo)
+{
+
+  auto id = anab::CosmicTagID_t::kNotTagged;
+  
+  if(track.Vertex().Z() < (0+fZBuffer) || track.Vertex().Z() > (geo.DetLength()-fZBuffer))
+    id = anab::CosmicTagID_t::kGeometry_Z;
+  else if(track.Vertex().Y() < (-1*geo.DetHalfHeight()+fYBuffer) || track.Vertex().Y() > (geo.DetHalfHeight()-fYBuffer))
+    id = anab::CosmicTagID_t::kGeometry_Y;
+  else if( (track.Vertex().X()>0 && track.Vertex().X() < (0+fXBuffer)) ||
+	   (track.Vertex().X()<2*geo.DetHalfWidth() && track.Vertex().X() > (2*geo.DetHalfWidth()-fXBuffer)) )
+    id = anab::CosmicTagID_t::kGeometry_X;
+
+  if( track.End().Z() < (0+fZBuffer) || track.End().Z() > (geo.DetLength()-fZBuffer) ){
+    if(id == anab::CosmicTagID_t::kNotTagged)
+      id = anab::CosmicTagID_t::kGeometry_Z;
+    else if(id == anab::CosmicTagID_t::kGeometry_Z)
+      id = anab::CosmicTagID_t::kGeometry_ZZ;
+    else if(id == anab::CosmicTagID_t::kGeometry_Y)
+      id = anab::CosmicTagID_t::kGeometry_YZ;
+    else if(id == anab::CosmicTagID_t::kGeometry_X)
+      id = anab::CosmicTagID_t::kGeometry_XZ;
+  }
+  else if( track.End().Y() < (-1*geo.DetHalfHeight()+fYBuffer) || track.End().Y() > (geo.DetHalfHeight()-fYBuffer) ){
+    if(id == anab::CosmicTagID_t::kNotTagged)
+      id = anab::CosmicTagID_t::kGeometry_Y;
+    else if(id == anab::CosmicTagID_t::kGeometry_Z)
+      id = anab::CosmicTagID_t::kGeometry_YZ;
+    else if(id == anab::CosmicTagID_t::kGeometry_Y)
+      id = anab::CosmicTagID_t::kGeometry_YY;
+    else if(id == anab::CosmicTagID_t::kGeometry_X)
+      id = anab::CosmicTagID_t::kGeometry_XY;
+  }
+  else if( (track.End().X()>0 && track.End().X() < (0+fXBuffer)) ||
+	   (track.End().X()<2*geo.DetHalfWidth() && track.End().X() > (2*geo.DetHalfWidth()-fXBuffer)) ){
+    if(id == anab::CosmicTagID_t::kNotTagged)
+      id = anab::CosmicTagID_t::kGeometry_X;
+    else if(id == anab::CosmicTagID_t::kGeometry_Z)
+      id = anab::CosmicTagID_t::kGeometry_XZ;
+    else if(id == anab::CosmicTagID_t::kGeometry_Y)
+      id = anab::CosmicTagID_t::kGeometry_XY;
+    else if(id == anab::CosmicTagID_t::kGeometry_X)
+      id = anab::CosmicTagID_t::kGeometry_XX;
+  }
+
+  if(track.Vertex().X() < 0 || track.Vertex().X() > 2*geo.DetHalfWidth())
+    id = anab::CosmicTagID_t::kOutsideDrift_Partial;
+  if(track.End().X() < 0 || track.End().X() > 2*geo.DetHalfWidth()){
+    if(id==anab::CosmicTagID_t::kOutsideDrift_Partial)
+      id = anab::CosmicTagID_t::kOutsideDrift_Complete;
+    else
+      id = anab::CosmicTagID_t::kOutsideDrift_Partial;
+  }
+
+  return id;
 }
 
 double trk::TrackAnalysis::MinDistanceStartPt(recob::Track const& t_probe, recob::Track const& t_ref)
@@ -87,11 +147,15 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 				       geo::GeometryCore const& geo)
 {
 
-  //std::cout << "Geometry:" << std::endl;
-  //std::cout << "\t" << geo.DetHalfWidth() << " " << geo.DetHalfHeight() << " " << geo.DetLength() << std::endl;
-  //std::cout << "\t z:(" << fZBuffer << "," << geo.DetLength()-fZBuffer << ")"
-  //	    << "\t y:(" << -1.*geo.DetHalfHeight()+fYBuffer << "," << geo.DetHalfHeight()-fYBuffer << ")"
-  //	    << "\t x:(" << 0+fXBuffer << "," << 2*geo.DetHalfWidth()-fXBuffer << ")" << std::endl;
+  if(fDebug){
+    std::cout << "Geometry:" << std::endl;
+    std::cout << "\t" << geo.DetHalfWidth() << " " << geo.DetHalfHeight() << " " << geo.DetLength() << std::endl;
+    std::cout << "\t z:(" << fZBuffer << "," << geo.DetLength()-fZBuffer << ")"
+	      << "\t y:(" << -1.*geo.DetHalfHeight()+fYBuffer << "," << geo.DetHalfHeight()-fYBuffer << ")"
+	      << "\t x:(" << 0+fXBuffer << "," << 2*geo.DetHalfWidth()-fXBuffer << ")" << std::endl;
+  }
+
+
   int containment_level=0;
   bool track_linked = false;
   std::size_t n_tracks=0;
@@ -104,26 +168,32 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
   fTrackContainmentIndices.clear();
   fTrackContainmentIndices.push_back( std::vector< std::pair<int,int> >() );
 
-  //std::cout << "Made it here with tracks of size " << tracksVec.size() << std::endl;
-
+  //first, loop through tracks and see what's not contained
+  
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     fTrackContainmentLevel[i_tc].resize(tracksVec[i_tc].size(),-1);
     fMinDistances[i_tc].resize(tracksVec[i_tc].size(),9e12);
     n_tracks += tracksVec[i_tc].size();
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
-      //std::cout << "\tprocessing " << i_tc << " " << i_t << std::endl;
+
       if(!IsContained(tracksVec[i_tc][i_t],geo)){
 	if(!track_linked) track_linked=true;
 	fTrackContainmentLevel[i_tc][i_t] = 0;
 	fTrackContainmentIndices.back().emplace_back(i_tc,i_t);
-	//std::cout << "\tTrack (" << i_tc << "," << i_t << ")" 
-	//	  << " " << containment_level << std::endl;
+	if(fDebug){
+	  std::cout << "\tTrack (" << i_tc << "," << i_t << ")" 
+		    << " " << containment_level << std::endl;
+	}
+	
+      }//end if contained
+    }//end loop over tracks
 
-      }
-    }
+  }//end loop over track collections
 
-  }
-  
+
+
+  //now, while we are still linking tracks, loop over all tracks and note anything
+  //close to an uncontained (or linked) track
   while(track_linked){
 
     track_linked=false;
@@ -137,9 +207,12 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 	else
 	  {
 	    for(auto const& i_tr : fTrackContainmentIndices[containment_level-1]){
-	      //std::cout << "\t\t" << MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
-	      //std::cout << "\t\t" << MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
 
+	      if(fDebug){
+		std::cout << "\t\t" << MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
+		std::cout << "\t\t" << MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]) << std::endl;
+	      }
+	      
 	      if(MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fMinDistances[i_tc][i_t])
 		fMinDistances[i_tc][i_t] = MinDistanceStartPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second]);
 	      if(MinDistanceEndPt(tracksVec[i_tc][i_t],tracksVec[i_tr.first][i_tr.second])<fMinDistances[i_tc][i_t])
@@ -150,49 +223,94 @@ void trk::TrackAnalysis::ProcessTracks(std::vector< std::vector<recob::Track> > 
 		if(!track_linked) track_linked=true;
 		fTrackContainmentLevel[i_tc][i_t] = containment_level;
 		fTrackContainmentIndices.back().emplace_back(i_tc,i_t);
-		//std::cout << "\tTrackPair (" << i_tc << "," << i_t << ") and (" << i_tr.first << "," << i_tr.second << ")"
-		//	  << " " << containment_level << std::endl;
-	      }
-	    }
-	  }
-	
-      }
-    }
-  }
 
+		if(fDebug){
+		  std::cout << "\tTrackPair (" << i_tc << "," << i_t << ") and (" << i_tr.first << "," << i_tr.second << ")"
+			    << " " << containment_level << std::endl;
+		}
+		
+	      }//end if track not isolated
+
+	    }//end loop over existing uncontained/linked tracks
+
+	  }//end if track not already linked
+	
+      }//end loops over tracks
+    }//end loop over track collections
+  }//end while linking tracks
+
+
+  //now we're going to will the tree and create tags if requested
   for(size_t i_tc=0; i_tc<tracksVec.size(); ++i_tc){
     for(size_t i_t=0; i_t<tracksVec[i_tc].size(); ++i_t){
+
+      //fill ROOT Tree
       fTrackTreeObj = TrackTree_t(tracksVec[i_tc][i_t]);
       fDistance = fMinDistances[i_tc][i_t];
       fCollection = i_tc;
       fTrkID = i_t;
       fContainment = fTrackContainmentLevel[i_tc][i_t];
-
       fTrackTree->Fill();
-      
-      if(fTrackContainmentLevel[i_tc][i_t]<0){
-	//std::cout << "Track (" << i_tc << "," << i_t << ")" 
-	//	  << " " << fTrackContainmentLevel[i_tc][i_t]
-	//	  << " " << minDistances[i_tc][i_t] << std::endl;
 
-	//std::cout << "\tS_(X,Y,Z) = ("
-	//	  << tracksVec[i_tc][i_t].Vertex().X() << ","
-	//	  << tracksVec[i_tc][i_t].Vertex().Y() << ","
-	//	  << tracksVec[i_tc][i_t].Vertex().Z() << ")" << std::endl;
-	//std::cout << "\tNearest wire ..." << std::endl;
-	//for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
-	//std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].Vertex(),i_p).Wire << std::endl;
-	//std::cout << "\tE_(X,Y,Z) = ("
-	//	  << tracksVec[i_tc][i_t].End().X() << ","
-	//	  << tracksVec[i_tc][i_t].End().Y() << ","
-	//	  << tracksVec[i_tc][i_t].End().Z() << ")" << std::endl;
-	//std::cout << "\tNearest wire ..." << std::endl;
-	//for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
-	//std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].End(),i_p).Wire << std::endl;
-	//std::cout << "\tLength=" << tracksVec[i_tc][i_t].Length() << std::endl;
-	//std::cout << "\tSimple_length=" << (tracksVec[i_tc][i_t].End()-tracksVec[i_tc][i_t].Vertex()).Mag() << std::endl;
-      }
-    }
-  }
+      if(fMakeCosmicTags){
+
+	float score=0;
+	auto id = anab::CosmicTagID_t::kNotTagged;
+	if(fTrackContainmentLevel[i_tc][i_t]>=0){
+	  score = 1./(1.+(float)fTrackContainmentLevel[i_tc][i_t]);
+	  if(fTrackContainmentLevel[i_tc][i_t]==0)
+	    id = GetCosmicTagID(tracksVec[i_tc][i_t],geo);
+	  else
+	    id = anab::CosmicTagID_t::kNotIsolated;
+	}
+
+	fCosmicTags[i_tc][i_t] =
+	  anab::CosmicTag(std::vector<float>{(float)tracksVec[i_tc][i_t].Vertex().X(),
+		                             (float)tracksVec[i_tc][i_t].Vertex().Y(),
+		                             (float)tracksVec[i_tc][i_t].Vertex().Z()},
+	                  std::vector<float>{(float)tracksVec[i_tc][i_t].End().X(),
+		                             (float)tracksVec[i_tc][i_t].End().Y(),
+		                             (float)tracksVec[i_tc][i_t].End().Z()},
+	    score,id);
+      }//end cosmic tag making
+
+      
+      //some debug work
+      if(fTrackContainmentLevel[i_tc][i_t]<0 && fDebug){
+	std::cout << "Track (" << i_tc << "," << i_t << ")" 
+		  << " " << fTrackContainmentLevel[i_tc][i_t]
+		  << " " << fMinDistances[i_tc][i_t] << std::endl;
+	std::cout << "\tS_(X,Y,Z) = ("
+		  << tracksVec[i_tc][i_t].Vertex().X() << ","
+		  << tracksVec[i_tc][i_t].Vertex().Y() << ","
+		  << tracksVec[i_tc][i_t].Vertex().Z() << ")" << std::endl;
+	std::cout << "\tNearest wire ..." << std::endl;
+	for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
+	  std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].Vertex(),i_p).Wire << std::endl;
+	std::cout << "\tE_(X,Y,Z) = ("
+		  << tracksVec[i_tc][i_t].End().X() << ","
+		  << tracksVec[i_tc][i_t].End().Y() << ","
+		  << tracksVec[i_tc][i_t].End().Z() << ")" << std::endl;
+	std::cout << "\tNearest wire ..." << std::endl;
+	for(size_t i_p=0; i_p<geo.Nplanes(); ++i_p)
+	  std::cout << "\t\tPlane " << i_p << " " << geo.NearestWireID(tracksVec[i_tc][i_t].End(),i_p).Wire << std::endl;
+	std::cout << "\tLength=" << tracksVec[i_tc][i_t].Length() << std::endl;
+	std::cout << "\tSimple_length=" << (tracksVec[i_tc][i_t].End()-tracksVec[i_tc][i_t].Vertex()).Mag() << std::endl;
+      }//end debug statements if track contained
+      
+    }//end loops over tracks
+  }//end loop over track collections
+  
+}//end ProcessTracks
+
+
+std::vector< std::vector<anab::CosmicTag> > const& trk::TrackAnalysis::GetTrackCosmicTags()
+{
+  if(fMakeCosmicTags)
+    return fCosmicTags;
+  else
+    throw cet::exception("TrackAnalysis::GetTrackCosmicTags")
+      << "Cosmic tags not created. Set MakeCosmicTags to true in fcl paramters.";
 }
+
 #endif

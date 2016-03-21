@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "RecoBase/Track.h"
+#include "AnalysisBase/CosmicTag.h"
 
 #include "TTree.h"
 #include "fhiclcpp/ParameterSet.h"
@@ -70,6 +71,15 @@ public:
   void SetRunEvent(unsigned int const&, unsigned int const&);
   void ProcessTracks(std::vector< std::vector<recob::Track> > const&,
 		     geo::GeometryCore const& );
+
+  std::vector< std::vector<int> > const& GetTrackContainmentValues()
+  { return fTrackContainmentLevel; }
+  std::vector< std::vector<double> > const& GetTrackMinDistanceValues()
+  { return fMinDistances; }
+  std::vector< std::vector<anab::CosmicTag> > const& GetTrackCosmicTags();
+
+  void setMakeCosmicTags(bool flag=true) { fMakeCosmicTags = flag; }
+  
   
  private:
 
@@ -77,6 +87,8 @@ public:
   double      fYBuffer;
   double      fXBuffer;
   double      fIsolation;
+  bool        fMakeCosmicTags;
+  bool        fDebug;
   
   TTree*       fTrackTree;
   TrackTree_t  fTrackTreeObj;
@@ -90,8 +102,11 @@ public:
   std::vector< std::vector<int> > fTrackContainmentLevel;
   std::vector< std::vector< std::pair<int,int> > > fTrackContainmentIndices;
   std::vector< std::vector<double> > fMinDistances;
+  std::vector< std::vector<anab::CosmicTag> > fCosmicTags;
+  
 
   bool IsContained(recob::Track const&, geo::GeometryCore const&);
+  anab::CosmicTagID_t GetCosmicTagID(recob::Track const&, geo::GeometryCore const&);
 
   double MinDistanceStartPt(recob::Track const&, recob::Track const&);
   double MinDistanceEndPt(recob::Track const&, recob::Track const&);

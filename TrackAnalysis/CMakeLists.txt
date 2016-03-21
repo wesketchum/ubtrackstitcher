@@ -5,6 +5,7 @@ art_make_library( LIBRARY_NAME  ub_TrackAnalysis
 	LIBRARIES
 		Geometry
 		RecoBase
+                AnalysisBase
                 ${FHICLCPP}
                 ${ROOT_BASIC_LIB_LIST}
                 ${CETLIB}
